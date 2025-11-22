@@ -1,0 +1,126 @@
+{
+    "dashboard": {
+        "title": "MetricWatch - Service Health",
+        "tags": [
+            "metricwatch",
+            "services"
+        ],
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Messages Processed (Total)",
+                "type": "graph",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "rate(metrics_consumer_messages_processed_total[5m])",
+                        "legendFormat": "Metrics Consumer"
+                    },
+                    {
+                        "expr": "rate(sentiment_consumer_messages_processed_total[5m])",
+                        "legendFormat": "Sentiment Consumer"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Processing Latency (p95)",
+                "type": "graph",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.95, rate(metrics_consumer_processing_seconds_bucket[5m]))",
+                        "legendFormat": "Metrics Consumer p95"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.95, rate(sentiment_consumer_processing_seconds_bucket[5m]))",
+                        "legendFormat": "Sentiment Consumer p95"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "API Request Rate",
+                "type": "graph",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                },
+                "targets": [
+                    {
+                        "expr": "sum(rate(api_requests_total[5m])) by (endpoint)",
+                        "legendFormat": "{{endpoint}}"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "WebSocket Connections",
+                "type": "stat",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                },
+                "targets": [
+                    {
+                        "expr": "websocket_connections"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "Sentiment Distribution",
+                "type": "piechart",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 16
+                },
+                "targets": [
+                    {
+                        "expr": "sentiment_distribution_total",
+                        "legendFormat": "{{sentiment}}"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "Model Inference Time",
+                "type": "graph",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 16
+                },
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.95, rate(sentiment_model_inference_seconds_bucket[5m]))",
+                        "legendFormat": "p95 Inference Time"
+                    }
+                ]
+            }
+        ],
+        "refresh": "10s",
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        }
+    }
+}

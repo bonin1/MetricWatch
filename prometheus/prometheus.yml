@@ -1,0 +1,42 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'metricwatch'
+    environment: 'development'
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Metrics Producer
+  - job_name: 'metrics-producer'
+    static_configs:
+      - targets: ['metrics-producer:8001']
+    metrics_path: '/metrics'
+
+  # Social Producer
+  - job_name: 'social-producer'
+    static_configs:
+      - targets: ['social-producer:8002']
+    metrics_path: '/metrics'
+
+  # Metrics Consumer
+  - job_name: 'metrics-consumer'
+    static_configs:
+      - targets: ['metrics-consumer:8003']
+    metrics_path: '/metrics'
+
+  # Sentiment Consumer
+  - job_name: 'sentiment-consumer'
+    static_configs:
+      - targets: ['sentiment-consumer:8004']
+    metrics_path: '/metrics'
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8000']
+    metrics_path: '/metrics'
