@@ -141,7 +141,7 @@ class SocialProducer:
                 produce_message(
                     self.producer,
                     self.topic,
-                    post.model_dump(),
+                    post.model_dump(mode='json'),
                     key=post.user_id
                 )
                 messages_sent.inc()

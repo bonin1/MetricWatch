@@ -10,8 +10,6 @@ import logging
 import time
 from datetime import datetime
 from typing import List, Dict
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from prometheus_client import Counter, Histogram, Gauge, start_http_server
 
 # Add shared module to path
@@ -19,13 +17,10 @@ sys.path.append('/app/shared')
 from kafka_config import create_consumer, consume_messages
 from storage_clients import redis_client, mongo_client, es_client
 from models import SocialText, SentimentResult
+from logging_config import setup_logging
+from sentiment_keyword import analyze_keyword_sentiment
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging("sentiment-consumer")
 
 # Prometheus metrics
 messages_processed = Counter('sentiment_consumer_messages_processed_total', 'Total messages processed')
@@ -44,84 +39,70 @@ class SentimentConsumer:
         self.group_id = 'sentiment-consumer-group'
         self.batch_size = int(os.getenv('CONSUMER_BATCH_SIZE', '10'))
         self.model_name = os.getenv('SENTIMENT_MODEL', 'distilbert-base-uncased-finetuned-sst-2-english')
+        self.sentiment_mode = os.getenv('SENTIMENT_MODE', 'transformers').lower()
         
         # Storage clients
         self.redis = redis_client.connect()
         self.mongo = mongo_client.connect()
         self.es = es_client.connect()
         
-        # Load sentiment analysis model
-        logger.info(f"Loading sentiment model: {self.model_name}")
-        self.load_model()
+        self.sentiment_pipeline = None
+        if self.sentiment_mode == 'keyword':
+            model_loaded.set(1)
+            logger.info("Using lightweight keyword sentiment mode (no ML model)")
+        else:
+            logger.info(f"Loading sentiment model: {self.model_name}")
+            self.load_model()
         
         logger.info(f"SentimentConsumer initialized - Topic: {self.topic}, Group: {self.group_id}")
     
     def load_model(self):
         """Load Hugging Face sentiment analysis model."""
         try:
-            # Use GPU if available
+            import torch
+            from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+
             device = 0 if torch.cuda.is_available() else -1
-            
-            # Load tokenizer and model
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
-            
-            # Create pipeline
+            tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
             self.sentiment_pipeline = pipeline(
                 'sentiment-analysis',
-                model=self.model,
-                tokenizer=self.tokenizer,
+                model=model,
+                tokenizer=tokenizer,
                 device=device,
                 truncation=True,
                 max_length=512
             )
-            
-            # Warm up model
-            logger.info("Warming up model...")
             self.sentiment_pipeline("This is a test sentence.")
-            
             model_loaded.set(1)
             logger.info(f"Model loaded successfully (device: {'GPU' if device == 0 else 'CPU'})")
-            
         except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            model_loaded.set(0)
-            raise
+            logger.error(f"Failed to load model, falling back to keyword mode: {e}")
+            self.sentiment_mode = 'keyword'
+            self.sentiment_pipeline = None
+            model_loaded.set(1)
     
     @model_inference_time.time()
     def analyze_sentiment(self, text: str) -> tuple:
-        """
-        Analyze sentiment of text using DistilBERT.
-        
-        Returns:
-            tuple: (sentiment_label, confidence_score)
-        """
+        """Analyze sentiment using transformers or keyword mode."""
+        if self.sentiment_mode == 'keyword' or self.sentiment_pipeline is None:
+            return analyze_keyword_sentiment(text)
         try:
             result = self.sentiment_pipeline(text)[0]
-            
-            # Map model labels to our format
             label = result['label'].lower()
             score = result['score']
-            
-            # DistilBERT SST-2 outputs POSITIVE/NEGATIVE
-            # Map to our schema: positive, negative, neutral
             if label == 'positive':
                 sentiment = 'positive'
             elif label == 'negative':
                 sentiment = 'negative'
             else:
-                # For edge cases, use score threshold
                 sentiment = 'positive' if score > 0.5 else 'negative'
-            
-            # If confidence is low, mark as neutral
             if score < 0.6:
                 sentiment = 'neutral'
-            
             return sentiment, score
-            
         except Exception as e:
             logger.error(f"Sentiment analysis failed: {e}")
-            return 'neutral', 0.5
+            return analyze_keyword_sentiment(text)
     
     def store_to_mongodb(self, result: SentimentResult):
         """Store sentiment result to MongoDB."""

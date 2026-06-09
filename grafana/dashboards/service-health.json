@@ -1,126 +1,225 @@
 {
-    "dashboard": {
-        "title": "MetricWatch - Service Health",
-        "tags": [
-            "metricwatch",
-            "services"
-        ],
-        "timezone": "browser",
-        "panels": [
-            {
-                "id": 1,
-                "title": "Messages Processed (Total)",
-                "type": "graph",
-                "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 0
-                },
-                "targets": [
-                    {
-                        "expr": "rate(metrics_consumer_messages_processed_total[5m])",
-                        "legendFormat": "Metrics Consumer"
-                    },
-                    {
-                        "expr": "rate(sentiment_consumer_messages_processed_total[5m])",
-                        "legendFormat": "Sentiment Consumer"
-                    }
-                ]
-            },
-            {
-                "id": 2,
-                "title": "Processing Latency (p95)",
-                "type": "graph",
-                "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 12,
-                    "y": 0
-                },
-                "targets": [
-                    {
-                        "expr": "histogram_quantile(0.95, rate(metrics_consumer_processing_seconds_bucket[5m]))",
-                        "legendFormat": "Metrics Consumer p95"
-                    },
-                    {
-                        "expr": "histogram_quantile(0.95, rate(sentiment_consumer_processing_seconds_bucket[5m]))",
-                        "legendFormat": "Sentiment Consumer p95"
-                    }
-                ]
-            },
-            {
-                "id": 3,
-                "title": "API Request Rate",
-                "type": "graph",
-                "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 8
-                },
-                "targets": [
-                    {
-                        "expr": "sum(rate(api_requests_total[5m])) by (endpoint)",
-                        "legendFormat": "{{endpoint}}"
-                    }
-                ]
-            },
-            {
-                "id": 4,
-                "title": "WebSocket Connections",
-                "type": "stat",
-                "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 12,
-                    "y": 8
-                },
-                "targets": [
-                    {
-                        "expr": "websocket_connections"
-                    }
-                ]
-            },
-            {
-                "id": 5,
-                "title": "Sentiment Distribution",
-                "type": "piechart",
-                "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 16
-                },
-                "targets": [
-                    {
-                        "expr": "sentiment_distribution_total",
-                        "legendFormat": "{{sentiment}}"
-                    }
-                ]
-            },
-            {
-                "id": 6,
-                "title": "Model Inference Time",
-                "type": "graph",
-                "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 12,
-                    "y": 16
-                },
-                "targets": [
-                    {
-                        "expr": "histogram_quantile(0.95, rate(sentiment_model_inference_seconds_bucket[5m]))",
-                        "legendFormat": "p95 Inference Time"
-                    }
-                ]
-            }
-        ],
-        "refresh": "10s",
-        "time": {
-            "from": "now-1h",
-            "to": "now"
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(metrics_consumer_messages_processed_total[5m])",
+          "legendFormat": "Metrics Consumer",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(sentiment_consumer_messages_processed_total[5m])",
+          "legendFormat": "Sentiment Consumer",
+          "refId": "B"
         }
+      ],
+      "title": "Messages Processed",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(metrics_consumer_processing_seconds_bucket[5m]))",
+          "legendFormat": "Metrics p95",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(sentiment_consumer_processing_seconds_bucket[5m]))",
+          "legendFormat": "Sentiment p95",
+          "refId": "B"
+        }
+      ],
+      "title": "Processing Latency (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(api_requests_total[5m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ],
+      "title": "API Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "websocket_connections",
+          "refId": "A"
+        }
+      ],
+      "title": "WebSocket Connections",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right" },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (sentiment) (sentiment_distribution_total)",
+          "legendFormat": "{{sentiment}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Sentiment Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(sentiment_model_inference_seconds_bucket[5m]))",
+          "legendFormat": "p95 inference",
+          "refId": "A"
+        }
+      ],
+      "title": "Model Inference Time",
+      "type": "timeseries"
     }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["metricwatch", "services"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "MetricWatch - Service Health",
+  "uid": "metricwatch-service-health",
+  "version": 1
 }

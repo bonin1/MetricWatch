@@ -1,9 +1,82 @@
-version: '3.8'
-
 services:
-  # Storage Services
+  # ---------------------------------------------------------------------------
+  # Message Bus
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: metricwatch-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    healthcheck:
+      # ruok via netcat is disabled in ZK 3.8+; use the admin HTTP API instead
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/commands/ruok"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    mem_limit: 512m
+    cpus: "0.5"
+    networks:
+      - metricwatch-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: metricwatch-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    mem_limit: 1g
+    cpus: "1.0"
+    networks:
+      - metricwatch-network
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: metricwatch-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic system-metrics --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic social-text --partitions 3 --replication-factor 1
+        echo "Kafka topics ready"
+    networks:
+      - metricwatch-network
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Storage
+  # ---------------------------------------------------------------------------
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: metricwatch-redis
     ports:
       - "6379:6379"
@@ -14,11 +87,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 256m
+    cpus: "0.25"
     networks:
       - metricwatch-network
 
   mongo:
-    image: mongo:7
+    image: mongo:7.0
     container_name: metricwatch-mongo
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
@@ -33,6 +108,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 512m
+    cpus: "0.5"
     networks:
       - metricwatch-network
 
@@ -53,6 +130,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 512m
+    cpus: "0.5"
     networks:
       - metricwatch-network
 
@@ -72,31 +151,61 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 60s
+    mem_limit: 1g
+    cpus: "1.0"
     networks:
       - metricwatch-network
 
-  # Monitoring Services
+  # ---------------------------------------------------------------------------
+  # Monitoring
+  # ---------------------------------------------------------------------------
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.2
     container_name: metricwatch-prometheus
     ports:
       - "${PROMETHEUS_PORT}:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
       - prometheus-data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 512m
+    cpus: "0.5"
+    networks:
+      - metricwatch-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: metricwatch-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 128m
+    cpus: "0.25"
     networks:
       - metricwatch-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.2
     container_name: metricwatch-grafana
     ports:
       - "${GRAFANA_PORT}:3000"
@@ -109,16 +218,21 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 256m
+    cpus: "0.5"
     networks:
       - metricwatch-network
 
-  # Producer Services
+  # ---------------------------------------------------------------------------
+  # Application Services
+  # ---------------------------------------------------------------------------
   metrics-producer:
     build:
       context: .
@@ -127,9 +241,19 @@ services:
     env_file:
       - .env
     depends_on:
+      kafka-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/metrics')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: "0.25"
     networks:
       - metricwatch-network
 
@@ -141,28 +265,46 @@ services:
     env_file:
       - .env
     depends_on:
+      kafka-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/metrics')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: "0.25"
     networks:
       - metricwatch-network
 
-  # Consumer Services
   metrics-consumer:
     build:
       context: .
       dockerfile: ./consumers/metrics-consumer/Dockerfile
-    container_name: metricwatch-metrics-consumer
     env_file:
       - .env
     depends_on:
+      kafka-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/metrics')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.5"
     networks:
       - metricwatch-network
 
@@ -170,21 +312,31 @@ services:
     build:
       context: .
       dockerfile: ./consumers/sentiment-consumer/Dockerfile
-    container_name: metricwatch-sentiment-consumer
+      args:
+        SENTIMENT_MODE: ${SENTIMENT_MODE:-keyword}
     env_file:
       - .env
     depends_on:
+      kafka-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       mongo:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/metrics')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
     restart: unless-stopped
+    mem_limit: 2g
+    cpus: "1.0"
     networks:
       - metricwatch-network
 
-  # API Gateway
   api-gateway:
     build:
       context: .
@@ -203,32 +355,77 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.5"
     networks:
       - metricwatch-network
 
-  # React Dashboard
   dashboard:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
     container_name: metricwatch-dashboard
     ports:
       - "3000:80"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: "0.25"
     networks:
       - metricwatch-network
+
+  seed:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile
+    container_name: metricwatch-seed
+    env_file:
+      - .env
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    profiles:
+      - seed
+    networks:
+      - metricwatch-network
+    restart: "no"
 
 networks:
   metricwatch-network:
     driver: bridge
 
 volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
   redis-data:
   mongo-data:
   postgres-data:
   es-data:
   prometheus-data:
+  alertmanager-data:
   grafana-data:

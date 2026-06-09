@@ -1,338 +1,255 @@
-# 🚀 MetricWatch - Fault-Tolerant Microservices System
+<div align="center">
 
-A production-grade, horizontally scalable microservices architecture featuring real-time system metrics collection, sentiment analysis using AI, and live dashboard updates through WebSockets.
+# MetricWatch
 
-## 🏗️ Architecture
+**Self-hosted real-time observability + AI sentiment analysis**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         KAFKA EVENT BUS                          │
-│                   (system-metrics, social-text)                  │
-└──────────────┬────────────────────────────────┬─────────────────┘
-               │                                │
-       ┌───────▼────────┐              ┌───────▼────────┐
-       │   PRODUCERS    │              │   CONSUMERS    │
-       ├────────────────┤              ├────────────────┤
-       │ Metrics        │              │ Metrics        │
-       │ Social Text    │              │ Sentiment (AI) │
-       └────────────────┘              └────┬───────────┘
-                                            │
-                    ┌───────────────────────┴──────────────────┐
-                    │         STORAGE LAYER                     │
-                    ├──────────┬──────────┬──────────┬─────────┤
-                    │  Redis   │ MongoDB  │Postgres  │  ES     │
-                    └──────────┴──────────┴──────────┴─────────┘
-                                            │
-                                   ┌────────▼────────┐
-                                   │  API GATEWAY    │
-                                   │  + WebSocket    │
-                                   └────────┬────────┘
-                                            │
-                                   ┌────────▼────────┐
-                                   │ REACT DASHBOARD │
-                                   │   (ECharts)     │
-                                   └─────────────────┘
-```
+Monitor your systems, analyze text sentiment, and visualize everything in a live dashboard — one command to deploy.
 
-## ✨ Features
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](api-gateway/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](dashboard/)
+[![Kafka](https://img.shields.io/badge/Apache_Kafka-7.6-231F20?logo=apachekafka&logoColor=white)](docker-compose.yml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](api-gateway/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-- **Event-Driven Architecture**: Apache Kafka for reliable message streaming
-- **Horizontal Scalability**: Stateless consumers with automatic partition rebalancing
-- **Multi-Storage Persistence**: Redis, MongoDB, PostgreSQL, Elasticsearch
-- **AI-Powered Sentiment Analysis**: Hugging Face DistilBERT model
-- **Real-Time Updates**: WebSocket connections via Socket.IO
-- **Modern Dashboard**: React with ECharts for beautiful visualizations
-- **Full Observability**: Prometheus + Grafana monitoring
-- **Fault Tolerance**: Service health checks and automatic restarts
+![MetricWatch Dashboard](docs/assets/dashboard.png)
 
-## 🛠️ Technology Stack
-
-| Component | Technology |
-|-----------|-----------|
-| **Event Bus** | Apache Kafka |
-| **Producers** | Python + confluent-kafka + psutil/Faker |
-| **Consumers** | Python + transformers (DistilBERT) |
-| **Storage** | Redis, MongoDB, PostgreSQL, Elasticsearch |
-| **API Gateway** | FastAPI + Socket.IO |
-| **Dashboard** | React + Vite + ECharts |
-| **Monitoring** | Prometheus + Grafana |
-| **Containerization** | Docker + Docker Compose |
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Docker and Docker Compose installed
-- **Existing Kafka instance running** (configured in your Docker network)
-- Minimum 6-8GB RAM available
-- Git
-
-### Installation
-
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd MetricWatch
-```
-
-2. **Configure Kafka connection**
-
-Edit `.env` file to point to your existing Kafka instance:
-```env
-KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-```
-
-3. **Start all services**
-```bash
-docker-compose up -d
-```
-
-4. **Verify services are running**
-```bash
-docker-compose ps
-```
-
-5. **Access the dashboard**
-- Dashboard: http://localhost:3000
-- API Gateway: http://localhost:8000
-- Grafana: http://localhost:3001 (admin/admin)
-- Prometheus: http://localhost:9090
-
-## 📊 Services Overview
-
-### Producers
-
-#### Metrics Producer
-- Collects system metrics (CPU, memory, disk, network) using `psutil`
-- Publishes to `system-metrics` Kafka topic every 5 seconds
-- Exposes Prometheus metrics on port 8001
-
-#### Social Producer
-- Generates realistic mock social media posts using Faker
-- Publishes to `social-text` Kafka topic every 2 seconds
-- Simulates varying sentiment (60% positive, 20% negative, 20% neutral)
-- Exposes Prometheus metrics on port 8002
-
-### Consumers
-
-#### Metrics Consumer
-- Consumes from `system-metrics` topic
-- Performs real-time aggregation (1-min, 5-min, 15-min windows)
-- **Multi-storage persistence**:
-  - **Redis**: Latest values with TTL for dashboard
-  - **PostgreSQL**: Time-series data for historical analysis
-  - **Elasticsearch**: Indexed metrics for search
-- Publishes events to WebSocket via Redis pub/sub
-- Consumer group: `metrics-consumer-group`
-- Exposes Prometheus metrics on port 8003
-
-#### Sentiment Consumer
-- Consumes from `social-text` topic
-- Performs sentiment analysis using DistilBERT
-- **Multi-storage persistence**:
-  - **MongoDB**: Full text + sentiment results
-  - **Elasticsearch**: Indexed for full-text search
-- Publishes events to WebSocket via Redis pub/sub
-- Consumer group: `sentiment-consumer-group`
-- Exposes Prometheus metrics on port 8004
-
-### API Gateway
-- FastAPI application with REST endpoints
-- Socket.IO WebSocket server for real-time updates
-- Connects to all storage backends
-- Endpoints:
-  - `GET /health` - Health check
-  - `GET /api/metrics/latest` - Latest metrics from Redis
-  - `GET /api/metrics/history` - Historical data from PostgreSQL
-  - `GET /api/metrics/aggregated` - Aggregated metrics
-  - `GET /api/sentiment/recent` - Recent sentiment from MongoDB
-  - `GET /api/sentiment/stats` - Sentiment statistics from Redis
-  - `GET /api/search` - Elasticsearch queries
-  - `GET /metrics` - Prometheus metrics
-
-### Dashboard
-- Modern React application built with Vite
-- Real-time charts using ECharts
-- WebSocket integration for live updates
-- Dark theme with glassmorphism effects
-- Responsive design
-
-## 🔄 Horizontal Scaling
-
-Scale consumers dynamically to handle increased load:
-
-```bash
-# Scale sentiment consumer to 3 instances
-docker-compose up -d --scale sentiment-consumer=3
-
-# Verify partition distribution
-docker-compose exec kafka kafka-consumer-groups \
-  --bootstrap-server localhost:9092 \
-  --describe \
-  --group sentiment-consumer-group
-
-# Scale back down
-docker-compose up -d --scale sentiment-consumer=1
-```
-
-Kafka automatically rebalances partitions across consumer instances.
-
-## 📈 Monitoring
-
-### Prometheus Metrics
-
-All services expose Prometheus metrics:
-- Message processing rates
-- Processing latency (histograms)
-- Error rates
-- Storage operation counts
-- Model inference time
-- WebSocket connections
-
-Access Prometheus: http://localhost:9090
-
-### Grafana Dashboards
-
-Pre-configured dashboards available at http://localhost:3001:
-- **Service Health**: Processing rates, latency, API metrics
-- Sentiment distribution
-- Model performance
-
-Default credentials: `admin` / `admin`
-
-## 🧪 Testing
-
-### Verify Kafka Topics
-
-```bash
-docker-compose exec kafka kafka-topics --list --bootstrap-server localhost:9092
-```
-
-Expected topics: `system-metrics`, `social-text`
-
-### Check Consumer Lag
-
-```bash
-docker-compose exec kafka kafka-consumer-groups \
-  --bootstrap-server localhost:9092 \
-  --describe \
-  --all-groups
-```
-
-### View Service Logs
-
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f sentiment-consumer
-```
-
-### Test API Endpoints
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Latest metrics
-curl http://localhost:8000/api/metrics/latest
-
-# Recent sentiment
-curl http://localhost:8000/api/sentiment/recent?limit=10
-```
-
-## 🛡️ Fault Tolerance
-
-The system is designed for resilience:
-
-1. **Kafka Replication**: Messages replicated across brokers
-2. **Consumer Groups**: Automatic partition rebalancing on failure
-3. **Health Checks**: All services have Docker health checks
-4. **Restart Policies**: Services automatically restart on failure
-5. **Connection Pooling**: Efficient resource usage for storage
-6. **WebSocket Reconnection**: Automatic reconnection on disconnect
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Key configuration in `.env`:
-
-```env
-# Kafka
-KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-KAFKA_TOPIC_METRICS=system-metrics
-KAFKA_TOPIC_SOCIAL=social-text
-
-# Producer intervals (seconds)
-METRICS_INTERVAL=5
-SOCIAL_INTERVAL=2
-
-# Consumer settings
-CONSUMER_BATCH_SIZE=10
-
-# Sentiment model
-SENTIMENT_MODEL=distilbert-base-uncased-finetuned-sst-2-english
-```
-
-## 📁 Project Structure
-
-```
-MetricWatch/
-├── shared/                    # Shared libraries
-│   ├── kafka_config.py       # Kafka utilities
-│   ├── storage_clients.py    # Storage connections
-│   └── models.py             # Pydantic models
-├── producers/
-│   ├── metrics-producer/     # System metrics collector
-│   └── social-producer/      # Social text generator
-├── consumers/
-│   ├── metrics-consumer/     # Metrics processor
-│   └── sentiment-consumer/   # Sentiment analyzer
-├── api-gateway/              # FastAPI + WebSocket server
-├── dashboard/                # React dashboard
-├── prometheus/               # Prometheus config
-├── grafana/                  # Grafana dashboards
-├── init-scripts/             # Database init scripts
-├── docker-compose.yml        # Service orchestration
-└── .env                      # Configuration
-```
-
-## 🐛 Troubleshooting
-
-### Services won't start
-- Check Docker resources (6-8GB RAM minimum)
-- Verify Kafka is accessible: `docker-compose exec metrics-producer ping kafka`
-- Check logs: `docker-compose logs <service-name>`
-
-### No data in dashboard
-- Verify WebSocket connection (green indicator in header)
-- Check API Gateway logs: `docker-compose logs api-gateway`
-- Ensure producers are running: `docker-compose ps`
-
-### High consumer lag
-- Scale consumers: `docker-compose up -d --scale <consumer>=3`
-- Check Prometheus metrics for bottlenecks
-- Verify storage backends are healthy
-
-### Sentiment model download slow
-- First startup downloads ~250MB model from Hugging Face
-- Subsequent starts use cached model
-- Check logs: `docker-compose logs sentiment-consumer`
-
-## 📝 License
-
-MIT License - feel free to use for learning and production!
-
-## 🤝 Contributing
-
-Contributions welcome! Please open an issue or PR.
-
-## 📧 Support
-
-For issues and questions, please open a GitHub issue.
+</div>
 
 ---
 
-**Built with ❤️ using Kafka, Python, React, and AI**
+## Quick Start
+
+**Prerequisites:** Docker Desktop (or Docker Engine + Compose), 6–8 GB RAM
+
+```bash
+git clone https://github.com/bonin1/MetricWatch.git
+cd MetricWatch
+```
+
+**Linux / macOS / Git Bash:**
+```bash
+./start.sh
+```
+
+**Windows (PowerShell or CMD)** — do **not** use `./start.sh` (Windows opens it in VS Code instead of running it):
+```powershell
+.\start.ps1
+# or
+start.cmd
+```
+
+That's it. No external Kafka required.
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **Dashboard** | http://localhost:3000 | — |
+| **API** | http://localhost:8000 | — |
+| **Grafana** | http://localhost:3001 | `admin` / `admin` |
+| **Prometheus** | http://localhost:9090 | — |
+| **Alertmanager** | http://localhost:9093 | — |
+
+```bash
+# CLI helpers
+./cli/metricwatch.sh status
+./cli/metricwatch.sh scale sentiment-consumer 3
+./cli/metricwatch.sh topics
+```
+
+### Seed demo data
+
+Fill the dashboard with sample metrics and sentiment (stack must be running):
+
+```powershell
+# Windows
+.\scripts\seed.ps1
+
+# Linux / macOS
+./scripts/seed.sh
+```
+
+Then refresh http://localhost:3000. See [scripts/README.md](scripts/README.md) for options.
+
+### Verify it works
+
+```powershell
+.\scripts\smoke_test.ps1
+```
+
+Full walkthrough (API, dashboard, Prometheus, Grafana): **[docs/TESTING.md](docs/TESTING.md)**
+
+---
+
+## Features
+
+| | |
+|---|---|
+| 📡 **Event-driven** | Apache Kafka + Zookeeper bundled with health checks |
+| 📊 **Live dashboard** | React + ECharts, WebSocket updates, dark/light mode |
+| 🤖 **AI sentiment** | DistilBERT (optional) or lightweight keyword mode |
+| 🔍 **Anomaly detection** | Z-score alerts on metric streams |
+| 💾 **Multi-storage** | Redis, MongoDB, PostgreSQL, Elasticsearch |
+| 📈 **Observability** | Prometheus, Grafana dashboards, Alertmanager rules |
+| 📤 **Export** | CSV/JSON export from API and dashboard |
+| 🐳 **Production-ready Docker** | Pinned images, resource limits, multi-stage builds |
+
+---
+
+## Use Cases
+
+- **Monitor personal projects** — drop-in stack for homelab or side projects
+- **Learn microservices** — Kafka consumers, event sourcing, polyglot storage
+- **Base for custom monitoring** — send metrics from your own apps ([integration guide](docs/INTEGRATION.md))
+- **Demo / portfolio** — impressive real-time dashboard out of the box
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              Kafka + Zookeeper (included in compose)             │
+│                   system-metrics · social-text                   │
+└──────────────┬────────────────────────────────┬─────────────────┘
+               │                                │
+       ┌───────▼────────┐              ┌───────▼────────┐
+       │   Producers    │              │   Consumers    │
+       │ Metrics·Social │              │ Metrics·AI     │
+       └────────────────┘              └────┬───────────┘
+                                            │
+                    ┌───────────────────────┴──────────────────┐
+                    │  Redis · MongoDB · Postgres · Elasticsearch │
+                    └───────────────────────┬────────────────────┘
+                                   ┌────────▼────────┐
+                                   │  API + WebSocket │
+                                   └────────┬────────┘
+                                   ┌────────▼────────┐
+                                   │ React Dashboard  │
+                                   └─────────────────┘
+```
+
+---
+
+## Screenshots
+
+![Dashboard](docs/assets/dashboard.png)
+
+| Dashboard | Grafana | Prometheus |
+|-----------|---------|------------|
+| http://localhost:3000 | http://localhost:3001 | http://localhost:9090 |
+
+---
+
+## Configuration
+
+Copy `.env.example` → `.env` (done automatically by `start.sh`):
+
+```env
+# Lightweight mode — no 250MB model download
+SENTIMENT_MODE=keyword
+
+# Or full AI (default)
+SENTIMENT_MODE=transformers
+
+# Anomaly detection
+ANOMALY_DETECTION_ENABLED=true
+ANOMALY_ZSCORE_THRESHOLD=3.0
+
+# Structured logs
+LOG_FORMAT=json
+```
+
+See [`.env.example`](.env.example) for all options.
+
+---
+
+## Send metrics from your app
+
+```bash
+# Python example
+pip install confluent-kafka
+KAFKA_BOOTSTRAP_SERVERS=localhost:29092 python examples/python_fastapi_producer.py
+
+# Node.js example
+npm install kafkajs
+KAFKA_BOOTSTRAP_SERVERS=localhost:29092 node examples/nodejs_producer.js
+```
+
+Full guide: [docs/INTEGRATION.md](docs/INTEGRATION.md)
+
+---
+
+## API highlights
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Health check |
+| `GET /api/metrics/latest` | Latest metrics (Redis) |
+| `GET /api/metrics/history` | Time-series (PostgreSQL) |
+| `GET /api/anomalies/recent` | Recent z-score anomalies |
+| `GET /api/export/metrics?format=csv` | Export metrics |
+| `GET /api/sentiment/stats` | Sentiment distribution |
+
+WebSocket events: `metric_update`, `sentiment_update`
+
+---
+
+## Scaling
+
+```bash
+docker compose up -d --scale sentiment-consumer=3
+./cli/metricwatch.sh scale metrics-consumer 2
+```
+
+---
+
+## Development
+
+```bash
+# Run tests
+pip install -r tests/requirements.txt -r api-gateway/requirements.txt -r shared/requirements.txt
+pytest tests/ -v
+
+# Dashboard dev server
+cd dashboard && npm install && npm run dev
+```
+
+---
+
+## Project structure
+
+```
+MetricWatch/
+├── scripts/          # Seed demo data (seed.ps1 / seed.sh)
+├── shared/           # Kafka, storage, logging, anomaly detection
+├── producers/        # Metrics & social text producers
+├── consumers/        # Metrics processor & sentiment analyzer
+├── api-gateway/      # FastAPI + Socket.IO
+├── dashboard/        # React + Vite
+├── prometheus/       # Prometheus + Alertmanager config
+├── grafana/          # Dashboards & provisioning
+├── examples/         # Node.js & Python producers
+├── cli/              # metricwatch.sh / metricwatch.ps1
+├── start.sh          # One-command deploy
+└── docker-compose.yml
+```
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Services won't start | Ensure 6–8 GB RAM; `docker compose logs <service>` |
+| Slow first boot | Sentiment model download (~250MB) — use `SENTIMENT_MODE=keyword` |
+| No dashboard data | Check WebSocket indicator (top-right); verify producers running |
+| Kafka connection | Kafka is included — use `kafka:9092` inside Docker, `localhost:29092` from host |
+
+---
+
+## License
+
+MIT — use freely for learning and production.
+
+**Built with Kafka, Python, React, and AI**

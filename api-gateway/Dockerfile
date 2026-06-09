@@ -1,19 +1,19 @@
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+COPY ./shared/requirements.txt /app/shared/requirements.txt
+COPY ./api-gateway/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt -r /app/shared/requirements.txt
+
 FROM python:3.11-slim
 
 WORKDIR /app
-
-# Copy shared libraries
+COPY --from=builder /install /usr/local
 COPY ./shared /app/shared
-
-# Copy API gateway code
-COPY ./api-gateway/requirements.txt .
 COPY ./api-gateway/main.py .
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt -r /app/shared/requirements.txt
-
-# Expose port
 EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=10s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-# Run the API gateway
 CMD ["python", "main.py"]

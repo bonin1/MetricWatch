@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="400" viewBox="0 0 960 400" role="img" aria-label="MetricWatch dashboard preview">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0f"/>
+      <stop offset="50%" style="stop-color:#1e1b4b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="400" fill="url(#bg)" rx="12"/>
+  <text x="40" y="56" fill="url(#accent)" font-family="system-ui,sans-serif" font-size="28" font-weight="700">MetricWatch</text>
+  <text x="40" y="82" fill="#a1a1aa" font-family="system-ui,sans-serif" font-size="14">Real-time metrics · Sentiment · Anomalies</text>
+  <rect x="40" y="110" width="560" height="200" fill="#161620" stroke="#ffffff15" rx="10"/>
+  <polyline points="60,280 120,220 180,240 240,180 300,200 360,140 420,160 480,120 540,150 580,130" fill="none" stroke="#6366f1" stroke-width="2.5"/>
+  <polyline points="60,290 120,260 180,270 240,250 300,255 360,230 420,240 480,210 540,220 580,200" fill="none" stroke="#34d399" stroke-width="2" opacity="0.8"/>
+  <rect x="620" y="110" width="300" height="95" fill="#161620" stroke="#ffffff15" rx="10"/>
+  <circle cx="680" cy="162" r="40" fill="none" stroke="#34d399" stroke-width="18" stroke-dasharray="120 132" transform="rotate(-90 680 162)"/>
+  <rect x="620" y="215" width="300" height="95" fill="#161620" stroke="#ffffff15" rx="10"/>
+  <rect x="640" y="240" width="240" height="8" fill="#27272a" rx="4"/>
+  <rect x="640" y="240" width="180" height="8" fill="#6366f1" rx="4"/>
+  <rect x="640" y="258" width="240" height="8" fill="#27272a" rx="4"/>
+  <rect x="640" y="258" width="120" height="8" fill="#34d399" rx="4"/>
+  <rect x="40" y="325" width="880" height="55" fill="#161620" stroke="#ffffff15" rx="10"/>
+  <circle cx="60" cy="352" r="5" fill="#34d399"/>
+  <text x="74" y="357" fill="#d4d4d8" font-family="monospace" font-size="12">cpu: 42.10 · memory: 68.3% · sentiment: positive (87%)</text>
+  <text x="40" y="385" fill="#71717a" font-family="system-ui,sans-serif" font-size="11">Replace with a live GIF: docs/assets/dashboard-demo.gif</text>
+</svg>

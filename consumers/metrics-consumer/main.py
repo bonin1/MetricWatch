@@ -17,18 +17,16 @@ sys.path.append('/app/shared')
 from kafka_config import create_consumer, consume_messages
 from storage_clients import redis_client, postgres_client, es_client
 from models import SystemMetric, MetricAggregation
+from logging_config import setup_logging
+from anomaly import ZScoreDetector
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging("metrics-consumer")
 
 # Prometheus metrics
 messages_processed = Counter('metrics_consumer_messages_processed_total', 'Total messages processed')
 processing_time = Histogram('metrics_consumer_processing_seconds', 'Time spent processing messages')
 storage_operations = Counter('metrics_consumer_storage_operations_total', 'Storage operations', ['backend', 'operation'])
+anomalies_detected = Counter('metrics_anomalies_detected_total', 'Anomalies detected', ['metric_type'])
 
 
 class MetricsConsumer:
@@ -38,6 +36,8 @@ class MetricsConsumer:
         self.topic = os.getenv('KAFKA_TOPIC_METRICS', 'system-metrics')
         self.group_id = 'metrics-consumer-group'
         self.batch_size = int(os.getenv('CONSUMER_BATCH_SIZE', '10'))
+        self.anomaly_enabled = os.getenv('ANOMALY_DETECTION_ENABLED', 'true').lower() == 'true'
+        self.anomaly_detector = ZScoreDetector.from_env() if self.anomaly_enabled else None
         
         # Storage clients
         self.redis = redis_client.connect()
@@ -118,22 +118,47 @@ class MetricsConsumer:
         except Exception as e:
             logger.error(f"Failed to index to Elasticsearch: {e}")
     
-    def publish_to_websocket(self, metric: SystemMetric):
+    def publish_to_websocket(self, metric: SystemMetric, extra: dict = None):
         """Publish metric event to Redis pub/sub for WebSocket gateway."""
         try:
-            message = {
-                'event_type': 'metric',
-                'data': {
-                    'metric_type': metric.metric_type,
-                    'value': metric.value,
-                    'hostname': metric.hostname,
-                    'timestamp': metric.timestamp.isoformat()
-                }
+            data = {
+                'metric_type': metric.metric_type,
+                'value': metric.value,
+                'hostname': metric.hostname,
+                'timestamp': metric.timestamp.isoformat(),
             }
+            if extra:
+                data.update(extra)
+            message = {'event_type': 'metric', 'data': data}
             self.redis.publish('websocket:metrics', json.dumps(message))
             logger.debug(f"Published to WebSocket channel: {metric.metric_type}")
         except Exception as e:
             logger.error(f"Failed to publish to WebSocket: {e}")
+
+    def check_anomaly(self, metric: SystemMetric) -> dict:
+        """Detect statistical anomalies; return extra fields for WebSocket payload."""
+        if not self.anomaly_detector:
+            return {}
+        key = f"{metric.hostname}:{metric.metric_type}"
+        result = self.anomaly_detector.check(key, metric.value)
+        if not result.is_anomaly:
+            return {}
+        anomalies_detected.labels(metric_type=metric.metric_type).inc()
+        payload = {
+            'metric_type': metric.metric_type,
+            'hostname': metric.hostname,
+            'value': metric.value,
+            'z_score': round(result.z_score, 2),
+            'mean': round(result.mean, 2),
+            'timestamp': metric.timestamp.isoformat(),
+        }
+        self.redis.lpush('anomalies:recent', json.dumps(payload))
+        self.redis.ltrim('anomalies:recent', 0, 99)
+        logger.warning(
+            "Anomaly detected",
+            extra={"metric_type": metric.metric_type, "z_score": result.z_score, "value": metric.value},
+        )
+        return {'anomaly': True, 'z_score': payload['z_score']}
     
     def add_to_aggregation_buffer(self, metric: SystemMetric):
         """Add metric to aggregation buffers."""
@@ -221,8 +246,8 @@ class MetricsConsumer:
             self.store_to_redis(metric)
             self.store_to_elasticsearch(metric)
             
-            # Publish to WebSocket
-            self.publish_to_websocket(metric)
+            anomaly_extra = self.check_anomaly(metric)
+            self.publish_to_websocket(metric, extra=anomaly_extra or None)
             
             # Add to aggregation buffers
             self.add_to_aggregation_buffer(metric)

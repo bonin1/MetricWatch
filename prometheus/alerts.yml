@@ -1,0 +1,38 @@
+groups:
+  - name: metricwatch
+    rules:
+      - alert: HighConsumerLag
+        expr: rate(metrics_consumer_messages_processed_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Metrics consumer may be stalled"
+          description: "No metrics processed in the last 5 minutes."
+
+      - alert: HighCPUAnomaly
+        expr: system_cpu_percent > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host CPU above 90%"
+          description: "CPU usage has been critically high for 2 minutes."
+
+      - alert: APIGatewayDown
+        expr: up{job="api-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Gateway is down"
+          description: "Prometheus cannot scrape the API gateway."
+
+      - alert: SentimentModelNotLoaded
+        expr: sentiment_model_loaded == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sentiment model not loaded"
+          description: "The sentiment consumer model failed to load."

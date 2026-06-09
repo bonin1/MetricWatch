@@ -5,6 +5,14 @@ global:
     cluster: 'metricwatch'
     environment: 'development'
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
 scrape_configs:
   # Prometheus itself
   - job_name: 'prometheus'

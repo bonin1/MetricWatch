@@ -5,6 +5,7 @@ Uses confluent-kafka-python (librdkafka wrapper) for high performance.
 import os
 import json
 import logging
+from datetime import date, datetime
 from typing import Dict, Any, Optional, Callable
 from confluent_kafka import Producer, Consumer, KafkaError, KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -59,6 +60,13 @@ def create_consumer(
     return consumer
 
 
+def _json_default(obj: Any) -> str:
+    """JSON serializer for datetime objects in Kafka payloads."""
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def delivery_report(err: Optional[KafkaError], msg: Any) -> None:
     """Callback for producer delivery reports."""
     if err is not None:
@@ -78,14 +86,19 @@ def produce_message(
         producer.produce(
             topic=topic,
             key=key.encode('utf-8') if key else None,
-            value=json.dumps(value).encode('utf-8'),
+            value=json.dumps(value, default=_json_default).encode('utf-8'),
             callback=delivery_report
         )
         producer.poll(0)  # Trigger callbacks
     except BufferError:
         logger.warning(f"Local producer queue is full ({len(producer)} messages awaiting delivery)")
         producer.poll(1)  # Block until queue has space
-        producer.produce(topic, key=key, value=json.dumps(value).encode('utf-8'), callback=delivery_report)
+        producer.produce(
+            topic,
+            key=key.encode('utf-8') if key else None,
+            value=json.dumps(value, default=_json_default).encode('utf-8'),
+            callback=delivery_report,
+        )
     except Exception as e:
         logger.error(f"Failed to produce message: {e}")
 

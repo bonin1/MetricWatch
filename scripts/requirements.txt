@@ -1,0 +1,7 @@
+confluent-kafka>=2.3.0
+redis>=5.0.0
+pymongo>=4.6.0
+psycopg2-binary>=2.9.9
+elasticsearch>=8.11.0
+python-dotenv>=1.0.0
+faker>=24.0.0

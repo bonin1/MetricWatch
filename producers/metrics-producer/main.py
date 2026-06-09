@@ -143,7 +143,7 @@ class MetricsProducer:
                         produce_message(
                             self.producer,
                             self.topic,
-                            metric.model_dump(),
+                            metric.model_dump(mode='json'),
                             key=f"{self.hostname}:{metric.metric_type}"
                         )
                         messages_sent.inc()

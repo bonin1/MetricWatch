@@ -1,16 +1,15 @@
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+COPY ./shared/requirements.txt /app/shared/requirements.txt
+COPY ./producers/metrics-producer/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt -r /app/shared/requirements.txt
+
 FROM python:3.11-slim
 
 WORKDIR /app
-
-# Copy shared libraries
+COPY --from=builder /install /usr/local
 COPY ./shared /app/shared
-
-# Copy producer code
-COPY ./producers/metrics-producer/requirements.txt .
 COPY ./producers/metrics-producer/main.py .
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt -r /app/shared/requirements.txt
-
-# Run the producer
 CMD ["python", "main.py"]

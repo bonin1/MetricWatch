@@ -4,27 +4,24 @@ Provides REST API endpoints and WebSocket server for real-time updates.
 """
 import os
 import json
-import logging
+import csv
+import io
 import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse
 import socketio
 from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
 import redis.asyncio as aioredis
 
-# Import storage clients
 import sys
 sys.path.append('/app/shared')
 from storage_clients import mongo_client, postgres_client, es_client
+from logging_config import setup_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging("api-gateway")
 
 # Prometheus metrics
 api_requests = Counter('api_requests_total', 'Total API requests', ['endpoint', 'method'])
@@ -311,6 +308,111 @@ async def get_sentiment_stats():
         
     except Exception as e:
         logger.error(f"Failed to get sentiment stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/anomalies/recent")
+@api_latency.labels(endpoint='/api/anomalies/recent').time()
+async def get_recent_anomalies(limit: int = Query(50, ge=1, le=100)):
+    """Get recent metric anomalies from Redis."""
+    api_requests.labels(endpoint='/api/anomalies/recent', method='GET').inc()
+    try:
+        raw = await redis_client.lrange('anomalies:recent', 0, limit - 1)
+        anomalies = [json.loads(item.decode('utf-8')) for item in raw]
+        return {"count": len(anomalies), "data": anomalies}
+    except Exception as e:
+        logger.error(f"Failed to get anomalies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/metrics")
+@api_latency.labels(endpoint='/api/export/metrics').time()
+async def export_metrics(
+    format: str = Query("json", pattern="^(json|csv)$"),
+    metric_type: str = Query("cpu"),
+    hours: int = Query(1, ge=1, le=168),
+):
+    """Export historical metrics as JSON or CSV."""
+    api_requests.labels(endpoint='/api/export/metrics', method='GET').inc()
+    since = datetime.utcnow() - timedelta(hours=hours)
+    try:
+        async with postgres_pool.acquire() as conn:
+            rows = await conn.fetch('''
+                SELECT timestamp, hostname, metric_type, value, metadata
+                FROM metrics_timeseries
+                WHERE metric_type = $1 AND timestamp >= $2
+                ORDER BY timestamp DESC
+                LIMIT 5000
+            ''', metric_type, since)
+
+        records = [
+            {
+                'timestamp': row['timestamp'].isoformat(),
+                'hostname': row['hostname'],
+                'metric_type': row['metric_type'],
+                'value': row['value'],
+                'metadata': row['metadata'],
+            }
+            for row in rows
+        ]
+
+        if format == 'json':
+            return JSONResponse(
+                content={"metric_type": metric_type, "count": len(records), "data": records},
+                headers={"Content-Disposition": f'attachment; filename="metrics-{metric_type}.json"'},
+            )
+
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=['timestamp', 'hostname', 'metric_type', 'value'])
+        writer.writeheader()
+        for r in records:
+            writer.writerow({k: r[k] for k in ['timestamp', 'hostname', 'metric_type', 'value']})
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type='text/csv',
+            headers={"Content-Disposition": f'attachment; filename="metrics-{metric_type}.csv"'},
+        )
+    except Exception as e:
+        logger.error(f"Failed to export metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/sentiment")
+@api_latency.labels(endpoint='/api/export/sentiment').time()
+async def export_sentiment(format: str = Query("json", pattern="^(json|csv)$"), limit: int = Query(500, ge=1, le=5000)):
+    """Export recent sentiment results as JSON or CSV."""
+    api_requests.labels(endpoint='/api/export/sentiment', method='GET').inc()
+    try:
+        collection = mongo_db['sentiment_results']
+        cursor = collection.find().sort('timestamp', -1).limit(limit)
+        records = []
+        for doc in cursor:
+            records.append({
+                'timestamp': doc['timestamp'].isoformat(),
+                'text': doc['text'],
+                'sentiment': doc['sentiment'],
+                'score': doc['score'],
+                'user_id': doc.get('user_id', ''),
+                'platform': doc.get('platform', ''),
+            })
+
+        if format == 'json':
+            return JSONResponse(
+                content={"count": len(records), "data": records},
+                headers={"Content-Disposition": 'attachment; filename="sentiment.json"'},
+            )
+
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=['timestamp', 'text', 'sentiment', 'score', 'user_id', 'platform'])
+        writer.writeheader()
+        writer.writerows(records)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type='text/csv',
+            headers={"Content-Disposition": 'attachment; filename="sentiment.csv"'},
+        )
+    except Exception as e:
+        logger.error(f"Failed to export sentiment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

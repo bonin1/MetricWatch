@@ -1,54 +1,52 @@
 .system-health {
     display: flex;
     align-items: center;
-    gap: 15px;
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 20px;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 .status-dot {
-    width: 10px;
-    height: 10px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
 }
 
 .connected .status-dot {
-    background: #91cc75;
-    box-shadow: 0 0 10px #91cc75;
+    background: var(--green);
+    box-shadow: 0 0 0 3px var(--green-muted);
+    animation: live-pulse 2s ease infinite;
 }
 
 .disconnected .status-dot {
-    background: #ee6666;
-    box-shadow: 0 0 10px #ee6666;
-    animation: none;
+    background: var(--text-faint);
 }
 
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-
-    50% {
-        opacity: 0.7;
-        transform: scale(1.1);
-    }
+.loading .status-dot {
+    background: var(--amber);
+    animation: live-pulse 1s ease infinite;
 }
 
-.status-text {
-    font-size: 14px;
-    font-weight: 500;
-    color: #ddd;
+.error .status-dot {
+    background: var(--red);
+}
+
+.connected .status-text { color: var(--green); }
+.disconnected .status-text { color: var(--text-faint); }
+.loading .status-text { color: var(--amber); }
+.error .status-text { color: var(--red); }
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
 }

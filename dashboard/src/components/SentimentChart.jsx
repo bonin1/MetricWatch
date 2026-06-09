@@ -1,113 +1,96 @@
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 
-function SentimentChart({ data }) {
+function SentimentChart({ data, theme = 'dark' }) {
     const chartRef = useRef(null);
     const chartInstance = useRef(null);
 
     useEffect(() => {
         if (!chartRef.current) return;
 
-        // Initialize chart
         if (!chartInstance.current) {
-            chartInstance.current = echarts.init(chartRef.current, 'dark');
+            chartInstance.current = echarts.init(chartRef.current, theme === 'dark' ? 'dark' : undefined);
+        } else {
+            chartInstance.current.dispose();
+            chartInstance.current = echarts.init(chartRef.current, theme === 'dark' ? 'dark' : undefined);
         }
 
-        // Count sentiments
-        const sentimentCounts = {
-            positive: 0,
-            negative: 0,
-            neutral: 0
-        };
-
-        data.forEach(item => {
-            const sentiment = item.data?.sentiment;
-            if (sentiment && sentimentCounts.hasOwnProperty(sentiment)) {
-                sentimentCounts[sentiment]++;
-            }
+        const counts = { positive: 0, negative: 0, neutral: 0 };
+        data.forEach((item) => {
+            const s = item.data?.sentiment;
+            if (s && Object.hasOwn(counts, s)) counts[s]++;
         });
 
-        // Prepare chart data
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
         const chartData = [
-            { value: sentimentCounts.positive, name: 'Positive', itemStyle: { color: '#91cc75' } },
-            { value: sentimentCounts.negative, name: 'Negative', itemStyle: { color: '#ee6666' } },
-            { value: sentimentCounts.neutral, name: 'Neutral', itemStyle: { color: '#fac858' } }
-        ];
+            { value: counts.positive, name: 'Positive', itemStyle: { color: '#22c55e' } },
+            { value: counts.negative, name: 'Negative', itemStyle: { color: '#ef4444' } },
+            { value: counts.neutral, name: 'Neutral', itemStyle: { color: '#71717a' } },
+        ].filter((d) => d.value > 0);
 
-        // Chart options
-        const option = {
+        const borderColor = theme === 'dark' ? '#18181b' : '#ffffff';
+        const textColor = theme === 'dark' ? '#a1a1aa' : '#52525b';
+
+        chartInstance.current.setOption({
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'item',
-                formatter: '{a} <br/>{b}: {c} ({d}%)'
+                formatter: '{b}: {c} ({d}%)',
+                backgroundColor: theme === 'dark' ? '#18181b' : '#fff',
+                borderColor: '#27272a',
             },
             legend: {
-                orient: 'vertical',
-                left: 'left',
-                textStyle: {
-                    color: '#ccc'
-                },
-                data: ['Positive', 'Negative', 'Neutral']
+                bottom: 0,
+                left: 'center',
+                icon: 'circle',
+                itemWidth: 8,
+                itemHeight: 8,
+                textStyle: { color: textColor, fontSize: 11 },
             },
-            series: [
-                {
-                    name: 'Sentiment',
-                    type: 'pie',
-                    radius: ['40%', '70%'],
-                    center: ['60%', '50%'],
-                    avoidLabelOverlap: false,
-                    itemStyle: {
-                        borderRadius: 10,
-                        borderColor: '#1a1a1a',
-                        borderWidth: 2
-                    },
-                    label: {
-                        show: true,
-                        formatter: '{b}\n{d}%',
-                        color: '#ccc'
-                    },
-                    emphasis: {
-                        label: {
-                            show: true,
-                            fontSize: 16,
-                            fontWeight: 'bold'
-                        },
-                        itemStyle: {
-                            shadowBlur: 10,
-                            shadowOffsetX: 0,
-                            shadowColor: 'rgba(0, 0, 0, 0.5)'
-                        }
-                    },
-                    labelLine: {
-                        show: true,
-                        lineStyle: {
-                            color: '#555'
-                        }
-                    },
-                    data: chartData
-                }
-            ]
-        };
+            series: [{
+                name: 'Sentiment',
+                type: 'pie',
+                radius: ['52%', '72%'],
+                center: ['50%', '44%'],
+                avoidLabelOverlap: true,
+                itemStyle: { borderRadius: 4, borderColor, borderWidth: 2 },
+                label: { show: false },
+                emphasis: {
+                    scaleSize: 6,
+                    itemStyle: { shadowBlur: 12, shadowColor: 'rgba(0,0,0,0.25)' },
+                },
+                data: chartData.length ? chartData : [{ value: 1, name: 'No data', itemStyle: { color: '#27272a' } }],
+            }],
+            graphic: total > 0 ? [{
+                type: 'text',
+                left: 'center',
+                top: '38%',
+                style: {
+                    text: `${total}`,
+                    fontSize: 28,
+                    fontWeight: 700,
+                    fill: theme === 'dark' ? '#fafafa' : '#09090b',
+                    fontFamily: 'Inter',
+                },
+            }, {
+                type: 'text',
+                left: 'center',
+                top: '48%',
+                style: {
+                    text: 'events',
+                    fontSize: 11,
+                    fill: textColor,
+                    fontFamily: 'Inter',
+                },
+            }] : [],
+        }, true);
 
-        chartInstance.current.setOption(option);
+        const onResize = () => chartInstance.current?.resize();
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, [data, theme]);
 
-        // Resize handler
-        const handleResize = () => {
-            chartInstance.current?.resize();
-        };
-        window.addEventListener('resize', handleResize);
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-        };
-    }, [data]);
-
-    return (
-        <div
-            ref={chartRef}
-            style={{ width: '100%', height: '400px' }}
-        />
-    );
+    return <div ref={chartRef} className="chart-canvas" />;
 }
 
 export default SentimentChart;

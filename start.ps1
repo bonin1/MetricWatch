@@ -1,86 +1,79 @@
-# MetricWatch Quick Start Script
-# This script helps you get started with the MetricWatch system
+# MetricWatch - one-command deploy (Windows)
+$ErrorActionPreference = "Stop"
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $Root
 
-Write-Host "🚀 MetricWatch - Quick Start" -ForegroundColor Cyan
+Write-Host "MetricWatch - Quick Start" -ForegroundColor Cyan
 Write-Host "================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check Docker
-Write-Host "Checking Docker..." -ForegroundColor Yellow
-if (Get-Command docker -ErrorAction SilentlyContinue) {
-    Write-Host "✓ Docker found" -ForegroundColor Green
-    docker --version
-} else {
-    Write-Host "✗ Docker not found. Please install Docker first." -ForegroundColor Red
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Write-Host "[X] Docker not found. Install Docker Desktop first." -ForegroundColor Red
     exit 1
 }
+Write-Host "[OK] $(docker --version)" -ForegroundColor Green
 
+$compose = "docker compose"
+$composeCheck = & docker compose version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
+        $compose = "docker-compose"
+    } else {
+        Write-Host "[X] Docker Compose not found." -ForegroundColor Red
+        exit 1
+    }
+}
+Write-Host "[OK] Docker Compose found" -ForegroundColor Green
 Write-Host ""
 
-# Check Docker Compose
-Write-Host "Checking Docker Compose..." -ForegroundColor Yellow
-if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
-    Write-Host "✓ Docker Compose found" -ForegroundColor Green
-    docker-compose --version
+if (-not (Test-Path ".env")) {
+    if (Test-Path ".env.example") {
+        Copy-Item ".env.example" ".env"
+        Write-Host "[OK] Created .env from .env.example" -ForegroundColor Green
+    } else {
+        Write-Host "[X] Missing .env.example" -ForegroundColor Red
+        exit 1
+    }
 } else {
-    Write-Host "✗ Docker Compose not found. Please install Docker Compose first." -ForegroundColor Red
-    exit 1
+    Write-Host "[OK] Using existing .env" -ForegroundColor Green
 }
-
 Write-Host ""
 
-# Check for existing Kafka
-Write-Host "Checking for Kafka container..." -ForegroundColor Yellow
-$kafkaContainers = docker ps --filter "name=kafka" --format "{{.Names}}"
-if ($kafkaContainers) {
-    Write-Host "✓ Found Kafka container(s): $kafkaContainers" -ForegroundColor Green
-    Write-Host "  Make sure KAFKA_BOOTSTRAP_SERVERS in .env points to your Kafka instance" -ForegroundColor Yellow
+$sentimentMode = "keyword"
+if (Test-Path ".env") {
+    $match = Select-String -Path ".env" -Pattern "^SENTIMENT_MODE=(.+)$" | Select-Object -First 1
+    if ($match) { $sentimentMode = $match.Matches.Groups[1].Value.Trim() }
+}
+if ($sentimentMode -eq "transformers") {
+    Write-Host "SENTIMENT_MODE=transformers - first build downloads ~2GB (PyTorch + CUDA libs). This can take 15-30 min." -ForegroundColor Yellow
+    Write-Host "For a fast start, set SENTIMENT_MODE=keyword in .env and re-run." -ForegroundColor Yellow
 } else {
-    Write-Host "⚠ No Kafka container found running" -ForegroundColor Yellow
-    Write-Host "  You need a running Kafka instance. See docs/KAFKA_CONNECTION.md" -ForegroundColor Yellow
+    Write-Host "SENTIMENT_MODE=keyword - lightweight build (no ML libraries)." -ForegroundColor Green
+}
+Write-Host "Starting all services..." -ForegroundColor Yellow
+Invoke-Expression "$compose up -d --build"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "[X] docker compose failed. Check output above or run: $compose logs" -ForegroundColor Red
+    exit $LASTEXITCODE
 }
 
 Write-Host ""
-
-# Prompt to continue
-$continue = Read-Host "Do you want to start MetricWatch services? (y/n)"
-if ($continue -ne "y") {
-    Write-Host "Exiting..." -ForegroundColor Yellow
-    exit 0
-}
-
-Write-Host ""
-Write-Host "Starting MetricWatch services..." -ForegroundColor Cyan
-Write-Host "This may take a few minutes on first run (downloading images, ML models)..." -ForegroundColor Yellow
-Write-Host ""
-
-# Start services
-docker-compose up -d
-
-Write-Host ""
-Write-Host "Waiting for services to be healthy..." -ForegroundColor Yellow
-Start-Sleep -Seconds 10
-
-# Check service status
-Write-Host ""
-Write-Host "Service Status:" -ForegroundColor Cyan
-docker-compose ps
+Write-Host "Waiting for core services..." -ForegroundColor Yellow
+Start-Sleep -Seconds 15
+Invoke-Expression "$compose ps"
 
 Write-Host ""
 Write-Host "================================" -ForegroundColor Cyan
-Write-Host "🎉 MetricWatch is starting!" -ForegroundColor Green
+Write-Host "MetricWatch is running!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Access the services at:" -ForegroundColor Cyan
-Write-Host "  📊 Dashboard:   http://localhost:3000" -ForegroundColor White
-Write-Host "  🔌 API Gateway: http://localhost:8000" -ForegroundColor White
-Write-Host "  📈 Grafana:     http://localhost:3001 (admin/admin)" -ForegroundColor White
-Write-Host "  🔍 Prometheus:  http://localhost:9090" -ForegroundColor White
+Write-Host "  Dashboard:   http://localhost:3000"
+Write-Host "  API:         http://localhost:8000"
+Write-Host "  Grafana:     http://localhost:3001  (admin / admin)"
+Write-Host "  Prometheus:  http://localhost:9090"
 Write-Host ""
-Write-Host "View logs with:" -ForegroundColor Cyan
-Write-Host "  docker-compose logs -f" -ForegroundColor White
-Write-Host ""
-Write-Host "Stop services with:" -ForegroundColor Cyan
-Write-Host "  docker-compose down" -ForegroundColor White
-Write-Host ""
-Write-Host "For troubleshooting, see README.md" -ForegroundColor Yellow
+Write-Host "  Seed data:   .\scripts\seed.ps1"
+Write-Host "  CLI:         .\cli\metricwatch.ps1 status"
+Write-Host "  Logs:        $compose logs -f"
+Write-Host "  Stop:        $compose down"
 Write-Host "================================" -ForegroundColor Cyan
